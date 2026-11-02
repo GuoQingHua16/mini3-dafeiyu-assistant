@@ -1,0 +1,110 @@
+{
+  "upstream": "https://cloud.listenai.com/CSKG836746/arcs-sdk/public/arcs_mini.git",
+  "commit": "620341ff97b7c5119b1c3e5796b3bc4e0dca3505",
+  "board": "arcs_mini3",
+  "partition_table": "res/arcs-mini3/partition_table.json",
+  "deployment": "CP app only",
+  "modified_files": [
+    {
+      "path": "apps-ui/apps/llm/presenters/CMakeLists.txt",
+      "base_sha256": "db37eca6cbbfa33f6e49569c0f2e3c61abed59b6c0e66058b1e2dffaeeb794b0",
+      "result_sha256": "abf2e7dc70a03fb0e08c54a725ec8e25b07a9b3fd23199f0600afc408a3d58ce"
+    },
+    {
+      "path": "apps-ui/apps/llm/presenters/home_presenter.c",
+      "base_sha256": "18c432b5ade1310df5273d0301bb48e2bedc8a5324e16771bb91ee359749c36a",
+      "result_sha256": "fc9da6d2faecf404dd1b198065aed16230d2d5ebe27fa0d98be07a3c8235cb30"
+    },
+    {
+      "path": "apps/arcs-mini/Kconfig",
+      "base_sha256": "1016c81b48f715a846202d5a2e7b4a8b323df80fcadae33e2ab220a972d97ad3",
+      "result_sha256": "a2c578f5ad06ec939a73724f1aaa801d92bb9553fbbdd7c82bcf6e464f902025"
+    },
+    {
+      "path": "apps/arcs-mini/arcs_mini3.conf",
+      "base_sha256": "05c2ff9be6aa0af0c8c71158d3fe73266a397aac85c51b8036a4668c0838dcda",
+      "result_sha256": "ee49ea48c8c02993fbc30b0c25b0b2aa8e65038abaf2b79964263d03fbbed23a"
+    },
+    {
+      "path": "apps/arcs-mini/button/app_button.c",
+      "base_sha256": "3202513fad9a21b1448bc08b16e6fcd582d728f88a39811f9fa97eab3c8fe9d0",
+      "result_sha256": "9ce8316336f408a8c70b8abd08d18e40c0083ef2b9f26c4892f48b4f3d988662"
+    },
+    {
+      "path": "apps/arcs-mini/main.c",
+      "base_sha256": "1516d7ed695b207bcf6517e96b28c0fa5e563b5fc231ff3ef257b5eb8cc1e970",
+      "result_sha256": "cee706fcd271f8e28d04e1d4474a46781cfd25d3dbdddcad4c251585685a35b0"
+    },
+    {
+      "path": "apps/arcs-mini/services/CMakeLists.txt",
+      "base_sha256": "f1dfec2c2b45d9123ea19551d34c95c20bff8c38cf8853122bef5a31516e1b93",
+      "result_sha256": "c48e7257a770d2583066c3da8033f21051ed78b4f8e76ad6d7e4e136708b90fc"
+    },
+    {
+      "path": "apps/arcs-mini/services/service_brightness.c",
+      "base_sha256": "e528f639d6a4cad91a91d20a481fd56fb4d459fdf4f8e957cb96a2fa31d37d72",
+      "result_sha256": "7f0326ba4b68d84af52addce86919154b8bbfa234404e1856f478d2ae6282d59"
+    },
+    {
+      "path": "apps/arcs-mini/services/service_brightness.h",
+      "base_sha256": "b2b26502bad67ceb0c4aa7922e7b64f6d5ffb844980462f3d74ef3cedf037ab6",
+      "result_sha256": "d1edde900a7788a366d035fba774cbf962f27850dd31284e88258207557b0124"
+    },
+    {
+      "path": "apps/arcs-mini/services/service_volume.c",
+      "base_sha256": "527cef7d4dc7744603d0211aa6f5bdea06f5a626f9813e33c84b7bf3f5384afa",
+      "result_sha256": "aeeb2ff66719eaf57b55c6c8ec0cc794fe2f0435b06e0deac00b9022dd75c42b"
+    },
+    {
+      "path": "apps/arcs-mini/services/service_volume.h",
+      "base_sha256": "ae009dafd18eb0f71f36c8fa0d395f0ac7df3d617ff37320dbdd70dfe576c233",
+      "result_sha256": "23f913b817d4bf98cb03153e1656c5450d838a4992b80de9fadcde8027fed167"
+    },
+    {
+      "path": "apps/arcs-mini/voice_player/voice_player_tts.c",
+      "base_sha256": "a280f3c8631d6aed98efd69c0b61f65645bea2a26231e75d050dadc53ef52eb6",
+      "result_sha256": "5e9080ce58a6e414331ba66fafdfd8f60c5672c6f2b88b14de8241bcadd922a8"
+    },
+    {
+      "path": "apps/arcs-mini/voice_player/voice_player_tts.h",
+      "base_sha256": "ccc9369d50f53b09902751490e5e2af7f81737d0f6d7ddfa9f7799cf961a66ad",
+      "result_sha256": "72b9d91f747bbcd69e25550fccde66ee4ae963b0b24cf5a50f09f523ede50ae1"
+    },
+    {
+      "path": "src/category/comm/voice_player_comm.c",
+      "base_sha256": "9eb0d644405f479145a21c04450c33c9b5ddd72646da8cf3ba9682e60fdeb61e",
+      "result_sha256": "d883e4e3b6a37ed327487a887f3288bd331bfa3d498c2c5b734a36aa8caeaabd"
+    },
+    {
+      "path": "src/server/lschat_server/voice_cloud.c",
+      "base_sha256": "01ce62ae72050f1ec131cbc168535e1837c1432701211b6671b7fd1b46ad700f",
+      "result_sha256": "91e8e153ef9058fce4595484f097354e6647c2aa217c909d6d14b174a10b6455"
+    }
+  ],
+  "overlay_files": [
+    {
+      "path": "apps/arcs-mini/services/service_local_agent.c",
+      "sha256": "369258872211b1fdc55d625dfd60a2d90f75d9abc9acac64a74689e9e88703db"
+    },
+    {
+      "path": "apps/arcs-mini/services/service_local_agent.h",
+      "sha256": "8842b6923da115d57dca3154ca7acf22e4c0bd9db82da0146907b4b689c0cff1"
+    },
+    {
+      "path": "apps/arcs-mini/voice_player/local_mp3.h",
+      "sha256": "b854088e7fb31078c4f2a7494fed9f002cc5c2daff6e20834a69fa9a5b4e31cb"
+    },
+    {
+      "path": "apps-ui/apps/llm/presenters/pet_presenter.c",
+      "sha256": "1471d74aa7b59510eaab4617677cd82f1fee1b8bdad99234e93b5891338bb763"
+    },
+    {
+      "path": "apps-ui/apps/llm/presenters/pet_whale_assets.c",
+      "sha256": "18a5174bda52285e74d74bd92741bd333de652ab84c8e169d708866a39008036"
+    },
+    {
+      "path": "apps-ui/apps/llm/presenters/pet_whale_assets.h",
+      "sha256": "73f32e1a34560867c3ac52e622138615b7c764dc90ccfe09d2f0f055ed96f23a"
+    }
+  ]
+}

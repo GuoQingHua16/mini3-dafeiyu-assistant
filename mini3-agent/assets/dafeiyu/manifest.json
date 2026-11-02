@@ -1,0 +1,33 @@
+{
+  "upstream": "https://github.com/YunYueSama/codex-deepseek-pet",
+  "commit": "7661c8b304c5400701f91da01b1a643a207331de",
+  "frame_size": [
+    176,
+    144
+  ],
+  "frames": [
+    "IDLE",
+    "BLINK",
+    "LISTEN",
+    "THINK",
+    "SPEAK_A",
+    "SPEAK_B",
+    "HAPPY",
+    "SAD",
+    "ANGRY",
+    "SURPRISE",
+    "SLEEP",
+    "DROWSY",
+    "SIT",
+    "CURL"
+  ],
+  "pixel_format": "RGB565 little-endian",
+  "image_bytes": 709632,
+  "sources": {
+    "idle-front.png": "79d3952acfe7620e0c2cfe7b80e9e6793d5f115252962f81cd56778402f4cdcd",
+    "expressions.png": "26a9b0edbad1ce1a39011f3daa37165a1dce2aff251f371deeba455807f377e1",
+    "dense-sleep.png": "32d68152ff16891ace5d8ebae9d87623c2b10b3d1ba1749010b398754677dcf1",
+    "LICENSE": "a8191ae2c7517f8cb2326d37cd62f84cfd9c2e18cefe113077897c642dc7912b",
+    "ASSET_LICENSE.md": "6ec5e61796b95f10eec94d46ec48c287a708fabdd494241f0d1d6cc64864625c"
+  }
+}

@@ -1,0 +1,513 @@
+diff --git a/apps-ui/apps/llm/presenters/CMakeLists.txt b/apps-ui/apps/llm/presenters/CMakeLists.txt
+--- a/apps-ui/apps/llm/presenters/CMakeLists.txt
++++ b/apps-ui/apps/llm/presenters/CMakeLists.txt
+@@ -15,6 +15,10 @@
+     sd_music_sync_presenter.c
+ )
+ 
++if(CONFIG_MINI3_LOCAL_AGENT)
++    target_sources(${LISA_UI_LIB_NAME} PRIVATE pet_presenter.c pet_whale_assets.c)
++endif()
++
+ if(CONFIG_OTA)
+     target_sources(${LISA_UI_LIB_NAME} PRIVATE ota_presenter.c)
+ endif()
+diff --git a/apps-ui/apps/llm/presenters/home_presenter.c b/apps-ui/apps/llm/presenters/home_presenter.c
+--- a/apps-ui/apps/llm/presenters/home_presenter.c
++++ b/apps-ui/apps/llm/presenters/home_presenter.c
+@@ -3020,6 +3020,7 @@
+     return 0;
+ }
+ 
++#ifndef CONFIG_MINI3_LOCAL_AGENT
+ const struct lisa_ui_nav_scr home_nav_scr = {
+     .unique_id = LISA_UI_NAV_SCR_ID_HOME,
+     .open = home_nav_scr_open,
+@@ -3028,3 +3029,4 @@
+     .resume = home_nav_scr_resume,
+     .close = home_nav_scr_close,
+ };
++#endif
+diff --git a/apps/arcs-mini/Kconfig b/apps/arcs-mini/Kconfig
+--- a/apps/arcs-mini/Kconfig
++++ b/apps/arcs-mini/Kconfig
+@@ -1,6 +1,14 @@
+ osource "$ARCS_BASE/Kconfig"
+ 
+ menu "Voice Application"
++
++config MINI3_LOCAL_AGENT
++    bool "Mini3 computer-assisted local voice agent"
++    depends on BOARD_ARCS_MINI3
++    default n
++    help
++      Disable ListenAI cloud initialization. Use USB microphone capture and
++      ADB-controlled LAN audio playback with a computer-hosted agent.
+ 
+ rsource "../../modules/Kconfig"
+ rsource "../../src/Kconfig"
+diff --git a/apps/arcs-mini/arcs_mini3.conf b/apps/arcs-mini/arcs_mini3.conf
+--- a/apps/arcs-mini/arcs_mini3.conf
++++ b/apps/arcs-mini/arcs_mini3.conf
+@@ -10,6 +10,8 @@
+ # 连同 CP 区尾部空闲一起并入堆，供拍照 JPEG 路径使用。
+ CONFIG_PSRAM_HEAP_SIZE=0x370000
+ CONFIG_LOG_UPLOAD_BUFFER_CAPACITY_KB=128
++CONFIG_MINI3_LOCAL_AGENT=y
++CONFIG_OTA=n
+ 
+ CONFIG_AUDIO_DEFAULT_MIC_GAIN_A_DB=36
+ CONFIG_AUDIO_DEFAULT_MIC_GAIN_D_DB=0
+diff --git a/apps/arcs-mini/button/app_button.c b/apps/arcs-mini/button/app_button.c
+--- a/apps/arcs-mini/button/app_button.c
++++ b/apps/arcs-mini/button/app_button.c
+@@ -462,6 +462,13 @@
+ #endif
+ 
+     /* 云端异常时，部分按键只负责打开错误或绑定信息页。 */
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++    if (evt->action == VOICE_MSG_BUTTON_ACTION_CLICK) {
++        extern void local_agent_button_click(void);
++        local_agent_button_click();
++        return;
++    }
++#endif
+     if (app_button_redirect_to_cloud_info(evt->action)) {
+         return;
+     }
+diff --git a/apps/arcs-mini/main.c b/apps/arcs-mini/main.c
+--- a/apps/arcs-mini/main.c
++++ b/apps/arcs-mini/main.c
+@@ -38,6 +38,10 @@
+ /* 被动网络异常的展示策略暂留在 main，后续可独立改为 Home 页二维码表情。 */
+ static bool app_should_open_info_by_cloud_state(uint32_t *status_out)
+ {
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++    (void)status_out;
++    return false;
++#endif
+     uint32_t status = QR_STATUS_CONNECTED;
+ 
+     switch (voice_cloud_get_state()) {
+diff --git a/apps/arcs-mini/services/CMakeLists.txt b/apps/arcs-mini/services/CMakeLists.txt
+--- a/apps/arcs-mini/services/CMakeLists.txt
++++ b/apps/arcs-mini/services/CMakeLists.txt
+@@ -1,4 +1,5 @@
+ listenai_library_named(app-services)
++listenai_library_sources_ifdef(CONFIG_MINI3_LOCAL_AGENT service_local_agent.c)
+ listenai_library_sources(
+     service_led.c
+     service_brightness.c
+diff --git a/apps/arcs-mini/services/service_brightness.c b/apps/arcs-mini/services/service_brightness.c
+--- a/apps/arcs-mini/services/service_brightness.c
++++ b/apps/arcs-mini/services/service_brightness.c
+@@ -39,7 +39,7 @@
+ 
+ static int service_brightness_clamp(int brightness);
+ static int service_brightness_to_hw(int brightness);
+-static void service_brightness_apply(int brightness);
++static int service_brightness_apply(int brightness);
+ static int service_brightness_build_display_config(lisa_display_config_t *cfg,
+                                                     lisa_device_t *spi_dev,
+                                                     lisa_device_t *gpioa_dev,
+@@ -79,19 +79,21 @@
+                        BRIGHTNESS_MAP_STEP;
+ }
+ 
+-static void service_brightness_apply(int brightness)
++static int service_brightness_apply(int brightness)
+ {
+     brightness = service_brightness_clamp(brightness);
+ 
+     if (!s_display_device) {
+         LOGW("Display device not available");
+-        return;
++        return -1;
+     }
+ 
+     int hw_brightness = service_brightness_to_hw(brightness);
+     if (lisa_display_set_brightness(s_display_device, hw_brightness) != 0) {
+         LOGE("Failed to set brightness to %d (hw: %d)", brightness, hw_brightness);
+-    }
++        return -1;
++    }
++    return 0;
+ }
+ 
+ /*
+@@ -214,6 +216,18 @@
+     service_brightness_apply(brightness);
+ }
+ 
++int service_brightness_set_checked(int brightness)
++{
++    int previous = service_brightness_get();
++    brightness = service_brightness_clamp(brightness);
++    if (service_brightness_apply(brightness) != 0) return -1;
++    if (lisa_kv_set_int(KV_KEY_USER_BRIGHTNESS, brightness) != 0) {
++        service_brightness_apply(previous);
++        return -1;
++    }
++    return 0;
++}
++
+ void service_brightness_set_temp(int brightness)
+ {
+     brightness = service_brightness_clamp(brightness);
+diff --git a/apps/arcs-mini/services/service_brightness.h b/apps/arcs-mini/services/service_brightness.h
+--- a/apps/arcs-mini/services/service_brightness.h
++++ b/apps/arcs-mini/services/service_brightness.h
+@@ -6,6 +6,7 @@
+ 
+ void service_brightness_init(void);
+ void service_brightness_set(int brightness);
++int service_brightness_set_checked(int brightness);
+ void service_brightness_set_temp(int brightness);
+ int service_brightness_set_blanked(bool blanked);
+ int service_brightness_get(void);
+diff --git a/apps/arcs-mini/services/service_volume.c b/apps/arcs-mini/services/service_volume.c
+--- a/apps/arcs-mini/services/service_volume.c
++++ b/apps/arcs-mini/services/service_volume.c
+@@ -84,6 +84,13 @@
+     LOGI("volume set: %d", volume);
+ }
+ 
++int service_volume_set_checked(int volume)
++{
++    volume = clamp_volume(volume);
++    if (lisa_kv_set_int(KV_KEY_USER_VOLUME, volume) != 0) return -1;
++    return voice_player_set_system_volume(volume);
++}
++
+ /**
+  * @brief   获取当前系统音量
+  * @return  当前音量值
+diff --git a/apps/arcs-mini/services/service_volume.h b/apps/arcs-mini/services/service_volume.h
+--- a/apps/arcs-mini/services/service_volume.h
++++ b/apps/arcs-mini/services/service_volume.h
+@@ -5,6 +5,7 @@
+ 
+ void service_volume_init(void);
+ void service_volume_set(int volume);
++int service_volume_set_checked(int volume);
+ void service_volume_set_temp(int volume);
+ void service_volume_restore_from_kv(void);
+ int service_volume_get(void);
+diff --git a/apps/arcs-mini/voice_player/voice_player_tts.c b/apps/arcs-mini/voice_player/voice_player_tts.c
+--- a/apps/arcs-mini/voice_player/voice_player_tts.c
++++ b/apps/arcs-mini/voice_player/voice_player_tts.c
+@@ -19,6 +19,12 @@
+ #include "voice_msg.h"
+ #include "voice_player_comm.h"
+ #include "voice_player/voice_player_tts.h"
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++#include "HTTPCUsr_api.h"
++#include "sysheap.h"
++#include "local_mp3.h"
++#include <stdio.h>
++#endif
+ 
+ /*
+  * TTS 播放执行器：接收云端 URL，通过独立任务串行播放，并维护最近 URL 快照。
+@@ -48,6 +54,7 @@
+     UBaseType_t queue_depth;
+     bool is_replay;
+     bool prefetch_mp3;
++    bool buffered_local;
+     char url[TTS_PLAY_URL_MAX];
+ } tts_play_request_t;
+ 
+@@ -83,6 +90,16 @@
+ static voice_tts_owned_result_t s_owned_result;
+ static uint32_t s_owned_stop_generation;
+ static uint32_t s_playing_generation;
++
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++#define LOCAL_MP3_MAX_BYTES (512U * 1024U)
++#define LOCAL_DOWNLOAD_TIMEOUT_MS 20000U
++static bool s_local_buffer_busy;
++static bool s_local_event_done;
++static voice_tts_owned_result_t s_local_event_result;
++static uint8_t *s_local_buffer;
++static uint32_t s_local_bytes, s_local_download_ms;
++#endif
+ 
+ static const char *voice_player_tts_state_name(app_player_state_t state)
+ {
+@@ -348,6 +365,140 @@
+ 
+ /* ==================== 内部工具：异步播放队列 ==================== */
+ 
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++/* Only the play worker owns this allocation. A failed/cancelled download never
++ * reaches the decoder. Require a bounded Content-Length, as sent by agent.py. */
++static bool local_audio_download(const tts_play_request_t *request)
++{
++    HTTPParameters *http = psram_calloc(1, sizeof(*http));
++    HTTP_CLIENT info = {0};
++    uint32_t received = 0;
++    bool opened = false, complete = false;
++    TickType_t started = xTaskGetTickCount();
++    if (!http) return false;
++    if (strlen(request->url) >= sizeof(http->Uri)) goto done;
++    strcpy(http->Uri, request->url);
++    http->HttpVerb = VerbGet;
++    http->nTimeout = 5; /* HTTP client uses seconds, unlike lisa_http request. */
++    opened = HTTPC_open(http) == 0;
++    if (!opened || !voice_player_tts_generation_is_current(request->generation) ||
++        HTTPC_request(http, NULL) != 0 ||
++        HTTPC_get_request_info(http, &info) != 0 || info.HTTPStatusCode != 200 ||
++        info.TotalResponseBodyLength == 0 ||
++        info.TotalResponseBodyLength > LOCAL_MP3_MAX_BYTES) goto done;
++    s_local_buffer = psram_malloc(info.TotalResponseBodyLength);
++    if (!s_local_buffer) goto done;
++    while (received < info.TotalResponseBodyLength) {
++        UINT32 count = 0;
++        uint32_t capacity = info.TotalResponseBodyLength - received;
++        if (capacity > 4096U) capacity = 4096U;
++        if (!voice_player_tts_generation_is_current(request->generation) ||
++            xTaskGetTickCount() - started >= pdMS_TO_TICKS(LOCAL_DOWNLOAD_TIMEOUT_MS)) goto done;
++        int rc = HTTPC_read(http, s_local_buffer + received, capacity, &count);
++        if (count > capacity || count == 0 ||
++            (rc != 0 && rc != HTTP_CLIENT_EOS)) goto done;
++        received += count;
++        if (rc == HTTP_CLIENT_EOS && received != info.TotalResponseBodyLength) goto done;
++    }
++    complete = voice_player_tts_generation_is_current(request->generation) &&
++        xTaskGetTickCount() - started < pdMS_TO_TICKS(LOCAL_DOWNLOAD_TIMEOUT_MS) &&
++        local_mp3_has_complete_frames(s_local_buffer, received);
++done:
++    if (opened) HTTPC_close(http);
++    psram_free(http);
++    taskENTER_CRITICAL();
++    s_local_bytes = received;
++    s_local_download_ms = (xTaskGetTickCount() - started) * portTICK_PERIOD_MS;
++    taskEXIT_CRITICAL();
++    LOGI("local audio download complete=%u bytes=%u time=%ums", complete,
++         (unsigned)received, (unsigned)s_local_download_ms);
++    return complete;
++}
++
++static void voice_player_tts_play_local(const tts_play_request_t *request)
++{
++    voice_tts_owned_result_t result = VOICE_TTS_OWNED_FAILED;
++    bool decoder_used = false, safe_to_free = true;
++    taskENTER_CRITICAL();
++    s_local_buffer_busy = true;
++    s_local_event_done = false;
++    s_local_event_result = VOICE_TTS_OWNED_PENDING;
++    s_local_bytes = s_local_download_ms = 0;
++    taskEXIT_CRITICAL();
++    if (!local_audio_download(request)) goto done;
++    if (!voice_player_tts_generation_is_current(request->generation)) goto done;
++    char url[80];
++    /* SDK mem_audio sample's mem:// syntax, with a PSRAM address instead of
++     * Flash. Keep the allocation alive until stop/reset closes the reader. */
++    snprintf(url, sizeof(url), "mem://addr=%usize=%u",
++             (unsigned)(uintptr_t)s_local_buffer, (unsigned)s_local_bytes);
++    app_player_play_opt_t options = {
++        .url = url, .request_tag = request->generation,
++        /* Do not abandon a PREPARED memory reader on cancellation. Let play_ex
++         * settle, then stop synchronously below, before freeing its source. */
++        .cancel_token = NULL,
++    };
++    taskENTER_CRITICAL();
++    s_playing_generation = request->generation;
++    taskEXIT_CRITICAL();
++    decoder_used = true;
++    if (app_player_play_ex(tts_player, &options) == APP_PLAYER_OK) {
++        TickType_t started = xTaskGetTickCount();
++        while (voice_player_tts_generation_is_current(request->generation)) {
++            taskENTER_CRITICAL();
++            bool finished = s_local_event_done;
++            result = s_local_event_result;
++            taskEXIT_CRITICAL();
++            if (finished) break;
++            if (xTaskGetTickCount() - started >= pdMS_TO_TICKS(90000)) {
++                result = VOICE_TTS_OWNED_FAILED;
++                break;
++            }
++            vTaskDelay(pdMS_TO_TICKS(20));
++        }
++    }
++done:
++    if (!voice_player_tts_generation_is_current(request->generation))
++        result = VOICE_TTS_OWNED_INTERRUPTED;
++    if (decoder_used) {
++        app_player_state_t state = app_player_get_state(tts_player);
++        if (state != APP_PLAYER_STATE_IDLE && state != APP_PLAYER_STATE_STOPPED)
++            (void)app_player_stop(tts_player);
++        state = app_player_get_state(tts_player);
++        safe_to_free = (state == APP_PLAYER_STATE_IDLE || state == APP_PLAYER_STATE_STOPPED) &&
++                       app_player_reset(tts_player) == APP_PLAYER_OK;
++    }
++    if (safe_to_free) {
++        psram_free(s_local_buffer);
++        s_local_buffer = NULL;
++    } else {
++        /* Fail closed: do not free a buffer that an unsettled decoder may
++         * still read, and do not let another request overwrite its pointer. */
++        result = VOICE_TTS_OWNED_FAILED;
++        LOGE("local audio reader did not close; buffer retained until reboot");
++    }
++    taskENTER_CRITICAL();
++    if (s_owned_generation == request->generation &&
++        s_owned_result == VOICE_TTS_OWNED_PENDING) {
++        s_owned_result = result == VOICE_TTS_OWNED_PENDING ? VOICE_TTS_OWNED_FAILED : result;
++        s_tts_active = false;
++    }
++    if (s_owned_stop_generation == request->generation) s_owned_stop_generation = 0;
++    s_local_buffer_busy = !safe_to_free;
++    taskEXIT_CRITICAL();
++    LOGI("local audio finished result=%u released=%u", (unsigned)result, safe_to_free);
++}
++
++void voice_player_tts_local_audio_info(bool *busy, uint32_t *bytes, uint32_t *download_ms)
++{
++    taskENTER_CRITICAL();
++    *busy = s_local_buffer_busy;
++    *bytes = s_local_bytes;
++    *download_ms = s_local_download_ms;
++    taskEXIT_CRITICAL();
++}
++#endif
++
+ /* TTS 播放工作线程：串行处理 TTS 播放请求，避免在 ebus 回调里阻塞 HTTP prepare。 */
+ static void voice_player_tts_stop_player(uint32_t stop_seq,
+                                          uint32_t generation,
+@@ -396,6 +547,13 @@
+                      (unsigned int)request.generation, request.url);
+                 continue;
+             }
++
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++            if (request.buffered_local) {
++                voice_player_tts_play_local(&request);
++                continue;
++            }
++#endif
+ 
+             if (request.is_replay) {
+                 voice_player_tts_consume_prepared_url(request.url);
+@@ -565,14 +723,30 @@
+     /* Keep classifying late events as app speech after its result is consumed. */
+     bool owned = event_tag && event_tag == s_owned_generation;
+     if (owned && s_owned_result == VOICE_TTS_OWNED_PENDING) {
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++        if (s_local_buffer_busy && (event == APP_PLAYER_EVENT_COMPLETED ||
++            event == APP_PLAYER_EVENT_ERROR || event == APP_PLAYER_EVENT_STOPPED)) {
++            s_local_event_result = event == APP_PLAYER_EVENT_COMPLETED ? VOICE_TTS_OWNED_COMPLETED :
++                event == APP_PLAYER_EVENT_ERROR ? VOICE_TTS_OWNED_FAILED : VOICE_TTS_OWNED_INTERRUPTED;
++            s_local_event_done = true;
++        } else
++#endif
++        {
+         if (event == APP_PLAYER_EVENT_COMPLETED) s_owned_result = VOICE_TTS_OWNED_COMPLETED;
+         else if (event == APP_PLAYER_EVENT_ERROR) s_owned_result = VOICE_TTS_OWNED_FAILED;
+         else if (event == APP_PLAYER_EVENT_STOPPED) s_owned_result = VOICE_TTS_OWNED_INTERRUPTED;
+         if (s_owned_result != VOICE_TTS_OWNED_PENDING) s_tts_active = false;
++        }
+     }
+     taskEXIT_CRITICAL();
+     /* App speech is not a dialogue completion or an alarm completion. */
+-    if (owned) return;
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++      if (owned && event == APP_PLAYER_EVENT_PLAYING) {
++          extern void local_agent_pet_playing(void);
++          local_agent_pet_playing();
++      }
++#endif
++      if (owned) return;
+     switch (event) {
+     case APP_PLAYER_EVENT_PLAYING:
+         voice_msg_pub(VOICE_MSG_PLAYER_TTS_PLAYING, NULL, 0);
+@@ -924,6 +1098,12 @@
+ {
+     bool accepted = false;
+     taskENTER_CRITICAL();
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++    if (s_local_buffer_busy) {
++        taskEXIT_CRITICAL();
++        return false;
++    }
++#endif
+     if (owner && s_tts_play_queue && !s_tts_active && !s_owned_id &&
+         !s_tts_stop_pending_seq && !s_owned_stop_generation) {
+         s_owned_id = owner;
+@@ -941,6 +1121,9 @@
+ {
+     if (!url || !url[0] || strlen(url) >= TTS_PLAY_URL_MAX) return false;
+     tts_play_request_t request = {0};
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++    request.buffered_local = true;
++#endif
+     strncpy(request.url, url, sizeof(request.url) - 1);
+     taskENTER_CRITICAL();
+     bool current = s_owned_id == owner && s_owned_generation == s_tts_generation &&
+diff --git a/apps/arcs-mini/voice_player/voice_player_tts.h b/apps/arcs-mini/voice_player/voice_player_tts.h
+--- a/apps/arcs-mini/voice_player/voice_player_tts.h
++++ b/apps/arcs-mini/voice_player/voice_player_tts.h
+@@ -59,3 +59,8 @@
+ void voice_player_tts_cancel_owned(uint32_t owner);
+ voice_tts_owned_result_t voice_player_tts_owned_result(uint32_t owner);
+ void voice_player_tts_release_owned(uint32_t owner);
++
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++/* Separate diagnostic query; keep the normal status line compatible. */
++void voice_player_tts_local_audio_info(bool *busy, uint32_t *bytes, uint32_t *download_ms);
++#endif
+diff --git a/src/category/comm/voice_player_comm.c b/src/category/comm/voice_player_comm.c
+--- a/src/category/comm/voice_player_comm.c
++++ b/src/category/comm/voice_player_comm.c
+@@ -90,7 +90,19 @@
+     }
+ 
+     LOGI("PA %s via exmcu mute", onoff ? "ON" : "OFF");
+-    return lisa_gpio_write_pin(s_pa_mute_dev, PA_MUTE_PIN, pa_mute_level(onoff ? false : true));
++    int ret;
++    for (unsigned attempt = 0; attempt < 3; ++attempt) {
++        ret = lisa_gpio_write_pin(s_pa_mute_dev, PA_MUTE_PIN, pa_mute_level(!onoff));
++        if (ret == LISA_DEVICE_OK) return ret;
++        if (ret != LISA_DEVICE_ERR_TIMEOUT && ret != LISA_DEVICE_ERR_BUSY) return ret;
++        /* Reapply the same level after a transient CH32/I2C failure. In
++         * particular, do not silently leave the speaker unmuted after speech. */
++        if (attempt < 2) {
++            LOGW("PA %s retry after transient error: %d", onoff ? "ON" : "OFF", ret);
++            vTaskDelay(pdMS_TO_TICKS(5));
++        }
++    }
++    return ret;
+ #else
+     LOGI("PA %s", onoff ? "ON" : "OFF");
+     return lisa_gpio_write_pin(lisa_device_get(PA_GPIO_DEVICE), PA_PIN_NUM, onoff ? LISA_GPIO_HIGH : LISA_GPIO_LOW);
+diff --git a/src/server/lschat_server/voice_cloud.c b/src/server/lschat_server/voice_cloud.c
+--- a/src/server/lschat_server/voice_cloud.c
++++ b/src/server/lschat_server/voice_cloud.c
+@@ -1521,6 +1521,11 @@
+ 
+ int voice_cloud_init(struct voice_cloud_connect_config *config)
+ {
++#ifdef CONFIG_MINI3_LOCAL_AGENT
++    /* Never create cloud clients, authentication or reconnect workers. */
++    (void)config;
++    return -1;
++#endif
+     int r;
+ 
+     if (cloud_init_done) {
+@@ -1769,6 +1774,7 @@
+ 
+ int voice_cloud_chat_stop(void)
+ {
++    if (!cloud_init_done) return 0;
+     int ret;
+ 
+     ret = session_voice_cancel();
+@@ -2018,6 +2024,7 @@
+ 
+ int voice_cloud_tts_synth(const char *txt)
+ {
++    if (!cloud_init_done) return -1;
+     if (!txt || txt[0] == '\0') {
+         LOGE("voice_cloud_tts_synth: invalid text (null or empty)");
+         return -1;
